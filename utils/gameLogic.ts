@@ -1,5 +1,5 @@
 
-import { Player, Platform, Particle, BackgroundElement, Theme, TrailPoint, PlatformType } from '../types';
+import { Player, Platform, Particle, BackgroundElement, Theme, TrailPoint, PlatformType, Item, FloatingText } from '../types';
 import {
   GRAVITY,
   JUMP_ADDITIONAL_FORCE,
@@ -61,13 +61,26 @@ export const generatePlatform = (prevPlatform: Platform | null, difficultyMultip
   else if (roll < 0.10) type = 'rare';
   else if (roll < 0.20) type = 'green';
 
+  // Generate Items
+  const items: Item[] = [];
+  if (type !== 'hazard' && Math.random() < 0.4) {
+      items.push({
+          id: Date.now() + Math.random(),
+          x: x + width / 2 - 10,
+          y: y - 30,
+          type: 'coin',
+          collected: false
+      });
+  }
+
   return {
     x,
     y,
     width,
     height: PLATFORM_HEIGHT,
     id: Date.now() + Math.random(),
-    type
+    type,
+    items
   };
 };
 
@@ -163,6 +176,30 @@ export const updatePlayer = (
   };
 };
 
+export const checkItemCollisions = (player: Player, platforms: Platform[]) => {
+  const events: { type: 'bonus' | 'penalty', scoreDelta: number }[] = [];
+  
+  platforms.forEach(platform => {
+    platform.items.forEach(item => {
+      if (item.collected) return;
+      
+      // Simple collision box for items
+      const itemSize = 20;
+      const hitX = player.x + player.width > item.x && player.x < item.x + itemSize;
+      const hitY = player.y + player.height > item.y && player.y < item.y + itemSize;
+
+      if (hitX && hitY) {
+        item.collected = true;
+        if (item.type === 'coin') {
+          events.push({ type: 'bonus', scoreDelta: 50 });
+        }
+        // Future item types can be added here
+      }
+    });
+  });
+  
+  return events;
+};
 
 // --- Rendering ---
 
@@ -317,6 +354,7 @@ export const drawGame = (
   platforms: Platform[],
   particles: Particle[],
   bgElements: BackgroundElement[],
+  floatingTexts: FloatingText[],
   cameraX: number,
   score: number,
   theme: Theme,
@@ -325,7 +363,7 @@ export const drawGame = (
   // Clear with transparency to let GridScan background show through
   ctx.clearRect(0, 0, width, height);
 
-  // Platforms
+  // Platforms and Items
   ctx.shadowColor = theme.primary;
   ctx.shadowBlur = 0; 
   
@@ -333,7 +371,59 @@ export const drawGame = (
     const screenX = platform.x - cameraX;
     if (screenX + platform.width > -100 && screenX < width + 100) {
       drawPlatform(ctx, platform, screenX);
+
+      // Draw Items
+      platform.items.forEach(item => {
+        if (item.collected) return;
+        const itemScreenX = item.x - cameraX;
+        
+        ctx.save();
+        ctx.translate(itemScreenX + 10, item.y + 10);
+        
+        // Bobbing animation
+        const bob = Math.sin(Date.now() / 200) * 5;
+        ctx.translate(0, bob);
+        
+        // Rotation for coin
+        if (item.type === 'coin') {
+            ctx.scale(Math.sin(Date.now() / 150), 1);
+        }
+
+        ctx.fillStyle = item.type === 'coin' ? '#FFD700' : '#00FFFF';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = ctx.fillStyle;
+        
+        ctx.beginPath();
+        ctx.arc(0, 0, 8, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Inner detail
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      });
     }
+  });
+
+  // Floating Texts
+  floatingTexts.forEach(ft => {
+    const screenX = ft.x - cameraX;
+    ctx.save();
+    ctx.fillStyle = ft.color;
+    ctx.shadowColor = ft.color;
+    ctx.shadowBlur = 5;
+    ctx.font = "bold 16px 'Courier New', monospace";
+    ctx.textAlign = 'center';
+    
+    // Fade out
+    const alpha = Math.max(0, ft.life / 30); // Last 30 frames fade
+    ctx.globalAlpha = Math.min(1.0, alpha);
+    
+    ctx.fillText(ft.text, screenX, ft.y);
+    ctx.restore();
   });
 
   // Complex Trail

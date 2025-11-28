@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { 
   GameStatus, 
@@ -7,7 +6,8 @@ import {
   Particle,
   Theme,
   BackgroundElement,
-  SaveData
+  SaveData,
+  FloatingText
 } from '../../types';
 import { 
   CANVAS_WIDTH, 
@@ -23,7 +23,8 @@ import {
   STORAGE_KEY_DATA,
   PLATFORM_BUFFER_COUNT,
   THEMES,
-  PLATFORM_TYPES
+  PLATFORM_TYPES,
+  FLOATING_TEXT_LIFESPAN
 } from '../../constants';
 import { 
   generatePlatform, 
@@ -31,11 +32,12 @@ import {
   drawGame,
   createExplosion,
   updateBackgroundElements,
-  getSpeedMultiplier
+  getSpeedMultiplier,
+  checkItemCollisions
 } from '../../utils/gameLogic';
 import { audioManager } from '../../utils/audioManager';
 import GameOverlay from './GameOverlay';
-import GridScan from '../Background/GridScan';
+import PixelBlast from '../Background/PixelBlast';
 
 const BounceRunner: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -66,6 +68,7 @@ const BounceRunner: React.FC = () => {
     platforms: [] as Platform[],
     particles: [] as Particle[],
     bgElements: [] as BackgroundElement[],
+    floatingTexts: [] as FloatingText[],
     baseSpeed: INITIAL_SPEED,
     tick: 0, // Global frame counter for waves
     cameraX: 0,
@@ -112,7 +115,8 @@ const BounceRunner: React.FC = () => {
       width: 1500,
       height: 40,
       id: 0,
-      type: 'default'
+      type: 'default',
+      items: []
     };
     
     const platforms = [startPlatform];
@@ -137,6 +141,7 @@ const BounceRunner: React.FC = () => {
       platforms,
       particles: [],
       bgElements: [],
+      floatingTexts: [],
       baseSpeed: INITIAL_SPEED,
       tick: 0,
       cameraX: -PLAYER_X_OFFSET,
@@ -221,7 +226,7 @@ const BounceRunner: React.FC = () => {
 
   // Main Loop
   const loop = useCallback(() => {
-    // Always run loop to update GridScan and visuals even if paused
+    // Always run loop to update visuals even if paused
     // if (!gameState.current.isRunning && status === GameStatus.PLAYING) return;
     
     const state = gameState.current;
@@ -253,6 +258,31 @@ const BounceRunner: React.FC = () => {
       );
       state.player = updatedPlayer;
 
+      // Item Collisions
+      const events = checkItemCollisions(state.player, state.platforms);
+      events.forEach(evt => {
+         // Create Visual text
+         state.floatingTexts.push({
+           x: state.player.x + state.player.width/2,
+           y: state.player.y - 20,
+           text: evt.scoreDelta > 0 ? `+${evt.scoreDelta}` : `${evt.scoreDelta}`,
+           life: FLOATING_TEXT_LIFESPAN,
+           color: evt.type === 'penalty' ? '#FF4444' : '#44FF44',
+           vy: -2
+         });
+         
+         state.bonusScore += evt.scoreDelta;
+         
+         if (evt.type === 'bonus') {
+           state.particles.push(...createExplosion(state.player.x, state.player.y, '#44FF44'));
+           // Play collect sound (reuse jump for now or add new)
+         } else {
+           // Reduce speed slightly on penalty?
+           // state.baseSpeed *= 0.8;
+           state.particles.push(...createExplosion(state.player.x, state.player.y, '#FF4444'));
+         }
+      });
+
       // Land Sound & Logic
       if (!wasGrounded && state.player.isGrounded) {
          audioManager.playLand();
@@ -268,6 +298,16 @@ const BounceRunner: React.FC = () => {
             if (pType && pType.scoreBonus !== 0) {
               state.bonusScore += pType.scoreBonus;
               
+              // Floating Text for Platform Bonus
+              state.floatingTexts.push({
+                 x: state.player.x + state.player.width/2,
+                 y: state.player.y - 40,
+                 text: pType.scoreBonus > 0 ? `+${pType.scoreBonus}` : `${pType.scoreBonus}`,
+                 life: FLOATING_TEXT_LIFESPAN,
+                 color: pType.scoreBonus > 0 ? '#FFD700' : '#FF4444',
+                 vy: -1.5
+              });
+
               // Special visual for bonus
               if (pType.scoreBonus > 0) {
                  state.particles.push(
@@ -308,6 +348,14 @@ const BounceRunner: React.FC = () => {
         p.life -= 0.03;
       });
       state.particles = state.particles.filter(p => p.life > 0);
+      
+      // 6. Floating Texts
+      state.floatingTexts.forEach(ft => {
+        ft.y += ft.vy;
+        ft.life--;
+        ft.vy *= 0.95; // damp
+      });
+      state.floatingTexts = state.floatingTexts.filter(ft => ft.life > 0);
     }
 
     // Draw
@@ -322,6 +370,7 @@ const BounceRunner: React.FC = () => {
       state.platforms, 
       state.particles, 
       state.bgElements,
+      state.floatingTexts,
       state.cameraX, 
       state.score,
       theme,
@@ -378,28 +427,39 @@ const BounceRunner: React.FC = () => {
 
   const currentTheme = THEMES.find(t => t.id === currentThemeId) || THEMES[0];
 
-  // Calculate scroll offset for grid based on player position
-  // Scale down the player X so the grid moves slower (parallax feel)
-  const gridScrollOffset = gameState.current ? gameState.current.player.x * 0.005 : 0;
-
   return (
     <div className="relative w-full h-screen bg-black flex items-center justify-center overflow-hidden">
       
       {/* 3D Background Layer */}
       <div className="absolute inset-0 z-0 opacity-80">
-        <GridScan 
-           linesColor={currentTheme.bg === '#0f0f17' ? '#7C3AED' : currentTheme.accent}
-           scanColor={currentTheme.primary}
-           scrollOffset={gridScrollOffset}
+        <PixelBlast 
+          variant="circle"
+          pixelSize={6}
+          color={currentTheme.primary}
+          patternScale={3}
+          patternDensity={1.2}
+          pixelSizeJitter={0.5}
+          enableRipples
+          rippleSpeed={0.4}
+          rippleThickness={0.12}
+          rippleIntensityScale={1.5}
+          liquid
+          liquidStrength={0.12}
+          liquidRadius={1.2}
+          liquidWobbleSpeed={5}
+          speed={0.6}
+          edgeFade={0.25}
+          transparent
         />
       </div>
 
-      <div className="relative w-full h-full max-w-7xl max-h-[1080px] flex items-center justify-center shadow-2xl z-10">
-        {/* Glow border based on current theme */}
+      {/* Full width container, remove max constraints */}
+      <div className="relative w-full h-full flex items-center justify-center shadow-2xl z-10">
+        {/* Glow border based on current theme - Optional, made subtle to fit full screen */}
         <div 
            className="absolute inset-0 pointer-events-none transition-all duration-1000 z-20"
            style={{
-             boxShadow: `inset 0 0 100px ${currentTheme.primary}20`
+             boxShadow: `inset 0 0 50px ${currentTheme.primary}20`
            }}
         />
 
@@ -407,7 +467,7 @@ const BounceRunner: React.FC = () => {
           ref={canvasRef}
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
-          className="w-full h-auto object-contain max-h-screen z-10"
+          className="w-full h-full object-contain z-10"
           style={{ aspectRatio: `${CANVAS_WIDTH}/${CANVAS_HEIGHT}` }}
         />
         

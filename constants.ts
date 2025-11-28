@@ -5,12 +5,14 @@ export const GRAVITY = 0.65;
 export const JUMP_FORCE = -7.5; 
 export const JUMP_ADDITIONAL_FORCE = -0.9; 
 export const MAX_JUMP_FRAMES = 16; 
-export const INITIAL_SPEED = 7;
+
+// Reset speed controls to original
+export const INITIAL_SPEED = 12;
 export const MAX_SPEED = 18;
-export const SPEED_INCREMENT = 0.0005;
+export const SPEED_INCREMENT = 0.005;
 
 // Speed Phase Config
-export const SPEED_WAVE_DURATION = 360; // 6 seconds cycle (5-7s requested)
+export const SPEED_WAVE_DURATION = 360; // 6 seconds cycle
 export const SPEED_WAVE_AMPLITUDE = 2; // How much speed fluctuates
 
 export const CANVAS_WIDTH = 1280;
@@ -22,12 +24,15 @@ export const PLAYER_X_OFFSET = 250;
 
 export const PLATFORM_MIN_WIDTH = 150;
 export const PLATFORM_MAX_WIDTH = 450;
-export const PLATFORM_HEIGHT = 26; // Updated to match SVG design
+export const PLATFORM_HEIGHT = 26; 
 export const PLATFORM_COLOR = '#FFFFFF';
 export const PLATFORM_BUFFER_COUNT = 10; 
 
+// Reset gap multipliers
 export const GAP_MIN_MULTIPLIER = 12; 
 export const GAP_MAX_MULTIPLIER = 26;
+
+export const FLOATING_TEXT_LIFESPAN = 60;
 
 export const STORAGE_KEY_DATA = 'bounce-runner-v2-data';
 
@@ -50,7 +55,7 @@ export const PLATFORM_TYPES = {
   hazard: {
     gradient: ["#FF3B3B", "#C91818"],
     stripeOpacity: 0.2,
-    scoreBonus: -50 // Penalty
+    scoreBonus: -50 
   }
 };
 
@@ -58,7 +63,7 @@ export const THEMES: Theme[] = [
   {
     id: 'default',
     name: 'Neon Core',
-    primary: '#8F00FF', // Electric Violet
+    primary: '#8F00FF', 
     accent: '#ffffff',
     bg: '#0f0f17',
     unlockScore: 0,

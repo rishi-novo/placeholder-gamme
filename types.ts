@@ -32,6 +32,14 @@ export interface Player {
 
 export type PlatformType = 'default' | 'green' | 'rare' | 'hazard';
 
+export interface Item {
+  id: number;
+  x: number;
+  y: number;
+  type: 'coin' | 'boost';
+  collected: boolean;
+}
+
 export interface Platform {
   x: number;
   y: number;
@@ -39,6 +47,7 @@ export interface Platform {
   height: number;
   id: number;
   type: PlatformType;
+  items: Item[];
 }
 
 export interface BackgroundElement {
@@ -72,6 +81,15 @@ export interface Particle {
   life: number;
   color: string;
   size: number;
+}
+
+export interface FloatingText {
+  x: number;
+  y: number;
+  text: string;
+  life: number;
+  color: string;
+  vy: number;
 }
 
 export interface Theme {
